@@ -8,7 +8,18 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Meal Planner">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233D2E26'/><text y='70' x='50' text-anchor='middle' font-size='55'>🍽️</text></svg>">
+<link rel="apple-touch-icon" id="appicon" href="">
+<script>
+(function(){
+  var c=document.createElement('canvas');c.width=180;c.height=180;
+  var x=c.getContext('2d');
+  x.fillStyle='#3D2E26';x.beginPath();x.roundRect(0,0,180,180,36);x.fill();
+  x.fillStyle='#FAF7F2';x.font='bold 38px Georgia,serif';x.textAlign='center';x.textBaseline='middle';
+  x.fillText('Meal',90,62);x.fillText('Planner',90,102);
+  x.fillStyle='#C4714F';x.fillRect(32,122,116,3);
+  document.getElementById('appicon').href=c.toDataURL('image/png');
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -132,7 +143,7 @@ function App(){
   if(!apiKey)return<SetupScreen onDone={k=>setApiKey(k)}/>;
   const nav=[{id:"today",e:"☀️",l:"Today"},{id:"week",e:"📅",l:"Week"},{id:"recipes",e:"📖",l:"Recipes"},{id:"add",e:"➕",l:"Add"},{id:"shop",e:"🛒",l:"Shop"}];
   return(<div style={{background:CREAM,minHeight:"100dvh",paddingBottom:"68px"}}>
-    <div style={{background:DARK,padding:"14px 16px",position:"sticky",top:0,zIndex:10}}>
+    <div style={{background:DARK,padding:"14px 16px",paddingTop:"calc(14px + env(safe-area-inset-top))",position:"sticky",top:0,zIndex:10}}>
       <div style={{maxWidth:"600px",margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div><h1 style={{color:"#FAF7F2",fontSize:"19px",fontWeight:"bold",letterSpacing:"0.02em"}}>Meal Planner</h1><p style={{color:MED,fontFamily:"sans-serif",fontSize:"10px",letterSpacing:"0.06em",textTransform:"uppercase",marginTop:"1px"}}>Protein-first · Strategic · Zero waste</p></div>
         <button onClick={()=>setShowSettings(true)} style={{color:MED,fontSize:"20px",border:"none",cursor:"pointer",padding:"4px 0 4px 8px"}}>⚙️</button>
@@ -302,7 +313,7 @@ function ShoppingView({weekPlan,recipes}){
 }
 
 function RecipeModal({recipe,onClose,onDelete}){
-  const [conf,setConf]=useState(false);const isDefault=recipe.id?.startsWith("s");
+  const [conf,setConf]=useState(false);
   return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(61,46,38,0.5)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:"600px",borderRadius:"22px 22px 0 0",background:"#FFF",maxHeight:"90dvh",display:"flex",flexDirection:"column"}}>
       <div style={{display:"flex",justifyContent:"center",padding:"10px 0 3px"}}><div style={{width:"36px",height:"4px",borderRadius:"2px",background:LIGHT}}/></div>
@@ -321,9 +332,8 @@ function RecipeModal({recipe,onClose,onDelete}){
         <div style={{marginBottom:"13px"}}>{recipe.steps?.map((step,i)=>(<div key={i} style={{display:"flex",gap:"10px",marginBottom:"10px"}}><span style={{width:"22px",height:"22px",borderRadius:"50%",background:TC,color:"#FAF7F2",fontFamily:"sans-serif",fontSize:"10px",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:"2px"}}>{i+1}</span><p style={{color:DARK,fontFamily:"sans-serif",fontSize:"14px",lineHeight:"1.6"}}>{step}</p></div>))}</div>
         {recipe.notes&&(<div style={{borderRadius:"13px",padding:"13px",background:CLIGHT,border:`1px solid ${LIGHT}`,marginBottom:"13px"}}><p style={{color:TC,fontFamily:"sans-serif",fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:"700",marginBottom:"5px"}}>Notes</p><p style={{color:DARK,fontFamily:"sans-serif",fontSize:"13px",lineHeight:"1.6"}}>{recipe.notes}</p></div>)}
         {recipe.url&&<a href={recipe.url} target="_blank" rel="noopener noreferrer" style={{display:"block",textAlign:"center",marginBottom:"13px",color:TC,fontFamily:"sans-serif",fontSize:"13px"}}>View original source ↗</a>}
-        {!isDefault&&(conf?(<div style={{borderRadius:"12px",padding:"13px",background:"#FEF2F2",border:"1px solid #FECACA"}}><p style={{color:"#991B1B",fontFamily:"sans-serif",fontSize:"13px",marginBottom:"9px",fontWeight:"600"}}>Delete this recipe? Can't be undone.</p><div style={{display:"flex",gap:"7px"}}><button onClick={()=>onDelete(recipe.id)} style={{flex:1,padding:"9px",borderRadius:"10px",background:"#E53E3E",color:"#FFF",fontFamily:"sans-serif",fontSize:"13px",fontWeight:"700",cursor:"pointer",border:"none"}}>Yes, delete</button><button onClick={()=>setConf(false)} style={{flex:1,padding:"9px",borderRadius:"10px",border:`1px solid ${LIGHT}`,color:MED,fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",background:"none"}}>Cancel</button></div></div>)
-        :(<button onClick={()=>setConf(true)} style={{width:"100%",padding:"10px",borderRadius:"10px",border:"1px solid #FECACA",color:"#E53E3E",fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",background:"none"}}>🗑 Delete Recipe</button>))}
-        {isDefault&&<p style={{color:MED,fontFamily:"sans-serif",fontSize:"11px",textAlign:"center",marginTop:"8px"}}>Built-in recipes can't be deleted</p>}
+        {conf?(<div style={{borderRadius:"12px",padding:"13px",background:"#FEF2F2",border:"1px solid #FECACA"}}><p style={{color:"#991B1B",fontFamily:"sans-serif",fontSize:"13px",marginBottom:"9px",fontWeight:"600"}}>Delete this recipe? Can't be undone.</p><div style={{display:"flex",gap:"7px"}}><button onClick={()=>onDelete(recipe.id)} style={{flex:1,padding:"9px",borderRadius:"10px",background:"#E53E3E",color:"#FFF",fontFamily:"sans-serif",fontSize:"13px",fontWeight:"700",cursor:"pointer",border:"none"}}>Yes, delete</button><button onClick={()=>setConf(false)} style={{flex:1,padding:"9px",borderRadius:"10px",border:`1px solid ${LIGHT}`,color:MED,fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",background:"none"}}>Cancel</button></div></div>)
+        :(<button onClick={()=>setConf(true)} style={{width:"100%",padding:"10px",borderRadius:"10px",border:"1px solid #FECACA",color:"#E53E3E",fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",background:"none"}}>🗑 Delete Recipe</button>)}
       </div>
     </div>
   </div>);
