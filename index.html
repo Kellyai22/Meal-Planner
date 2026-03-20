@@ -305,6 +305,18 @@ function AddRecipeView({recipes,apiKey,onSave}){
   </div>);
 }
 
+function SwipeItem({children,onSwipe,borderBottom}){
+  const ref=React.useRef(null);const startX=React.useRef(0);const curX=React.useRef(0);const swiping=React.useRef(false);
+  const threshold=80;
+  const onTouchStart=e=>{startX.current=e.touches[0].clientX;curX.current=0;swiping.current=false;const el=ref.current;if(el)el.style.transition="none";};
+  const onTouchMove=e=>{const dx=e.touches[0].clientX-startX.current;if(dx>=0){curX.current=0;if(ref.current)ref.current.style.transform="translateX(0)";return;}curX.current=dx;swiping.current=Math.abs(dx)>10;if(ref.current)ref.current.style.transform=`translateX(${dx}px)`;};
+  const onTouchEnd=()=>{const el=ref.current;if(!el)return;el.style.transition="transform 0.25s ease";if(curX.current<-threshold){el.style.transform=`translateX(-100%)`;setTimeout(onSwipe,200);}else{el.style.transform="translateX(0)";}};
+  return React.createElement("div",{style:{position:"relative",overflow:"hidden",borderBottom}},
+    React.createElement("div",{style:{position:"absolute",right:0,top:0,bottom:0,width:"100%",display:"flex",alignItems:"center",justifyContent:"flex-end",paddingRight:"18px",background:TC,color:"#FFF",fontFamily:"sans-serif",fontSize:"12px",fontWeight:"600"}},"Done ✓"),
+    React.createElement("div",{ref,onTouchStart,onTouchMove,onTouchEnd,style:{position:"relative",zIndex:1,background:"#FFF"}},children)
+  );
+}
+
 function ShoppingView({weekPlan,recipes}){
   const [hidden,setHidden]=useState(()=>load("mp_hidden_v3",{}));const [extra,setExtra]=useState("");const [extras,setExtras]=useState(()=>load("mp_extras_v3",[]));
   const hideItem=k=>{const h={...hidden,[k]:true};setHidden(h);save("mp_hidden_v3",h);};
@@ -326,10 +338,12 @@ function ShoppingView({weekPlan,recipes}){
     {Object.entries(cats).map(([cat,items])=>(<div key={cat} style={{marginBottom:"16px"}}>
       <h3 style={{color:DARK,fontFamily:"sans-serif",fontSize:"12px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:"7px"}}>{cat}</h3>
       <div style={{borderRadius:"13px",overflow:"hidden",background:"#FFF",border:`1px solid ${LIGHT}`}}>
-        {items.map((item,i)=>(<div key={item.key} style={{display:"flex",alignItems:"center",gap:"10px",padding:"11px 13px",borderBottom:i<items.length-1?`1px solid ${LIGHT}`:"none",background:"#FFF"}}>
-          <span style={{flex:1,color:DARK,fontFamily:"sans-serif",fontSize:"13px"}}>{item.label}</span>
-          <button onClick={()=>{if(item.extra){remExtra(item.extraIdx);}else{hideItem(item.key);}}} style={{color:MED,fontSize:"16px",border:"none",cursor:"pointer",padding:"0 4px",background:"none",flexShrink:0}}>×</button>
-        </div>))}
+        {items.map((item,i)=>(<SwipeItem key={item.key} onSwipe={()=>{if(item.extra){remExtra(item.extraIdx);}else{hideItem(item.key);}}} borderBottom={i<items.length-1?`1px solid ${LIGHT}`:"none"}>
+          <div style={{display:"flex",alignItems:"center",gap:"10px",padding:"11px 13px",background:"#FFF"}}>
+            <span style={{flex:1,color:DARK,fontFamily:"sans-serif",fontSize:"13px"}}>{item.label}</span>
+            <button onClick={()=>{if(item.extra){remExtra(item.extraIdx);}else{hideItem(item.key);}}} style={{color:MED,fontSize:"16px",border:"none",cursor:"pointer",padding:"0 4px",background:"none",flexShrink:0}}>×</button>
+          </div>
+        </SwipeItem>))}
       </div>
     </div>))}
   </div>);
