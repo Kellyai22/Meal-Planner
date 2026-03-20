@@ -306,29 +306,29 @@ function AddRecipeView({recipes,apiKey,onSave}){
 }
 
 function ShoppingView({weekPlan,recipes}){
-  const [checked,setChecked]=useState(()=>load("mp_checked_v3",{}));const [extra,setExtra]=useState("");const [extras,setExtras]=useState(()=>load("mp_extras_v3",[]));
-  const toggle=k=>{const c={...checked,[k]:!checked[k]};setChecked(c);save("mp_checked_v3",c);};
+  const [hidden,setHidden]=useState(()=>load("mp_hidden_v3",{}));const [extra,setExtra]=useState("");const [extras,setExtras]=useState(()=>load("mp_extras_v3",[]));
+  const hideItem=k=>{const h={...hidden,[k]:true};setHidden(h);save("mp_hidden_v3",h);};
   const addExtra=()=>{if(!extra.trim())return;const e=[...extras,extra.trim()];setExtras(e);save("mp_extras_v3",e);setExtra("");};
   const remExtra=i=>{const e=extras.filter((_,idx)=>idx!==i);setExtras(e);save("mp_extras_v3",e);};
-  const clearDone=()=>{const c={};Object.entries(checked).forEach(([k,v])=>{if(!v)c[k]=false;});setChecked(c);save("mp_checked_v3",c);};
+  const restoreAll=()=>{setHidden({});save("mp_hidden_v3",{});};
   const allItems=[];const seen=new Set();
   DAYS.forEach(day=>{const plan=weekPlan[day.toLowerCase()]||{};MEALS.forEach(meal=>{const val=plan[meal];if(!val)return;const r=recipes.find(r=>r.id===val);if(!r?.ingredients)return;r.ingredients.forEach(ing=>{const k=(ing.i||"").toLowerCase().trim();if(k&&!seen.has(k)){seen.add(k);allItems.push({key:k,label:`${ing.q||""} ${ing.u||""} ${ing.i||""}`.trim().replace(/\s+/g," "),cat:categorize(ing.i||"")});}});});});
   [{key:"greek-yoghurt",label:"Greek yoghurt, full fat (large tub)",cat:"🧀 Dairy & Eggs"},{key:"eggs-12",label:"Eggs × 12",cat:"🧀 Dairy & Eggs"},{key:"frozen-berries",label:"Frozen berries (large bag)",cat:"❄️ Frozen"},{key:"bananas",label:"Bananas (bunch — freeze ripe ones)",cat:"🍎 Fruit"},{key:"baby-spinach",label:"Baby spinach (large bag)",cat:"🥬 Vegetables"},{key:"cherry-toms",label:"Cherry tomatoes (punnet)",cat:"🥬 Vegetables"},{key:"macadamias",label:"Macadamias (bench jar)",cat:"🥜 Snacks"},{key:"peanuts",label:"Peanuts",cat:"🥜 Snacks"},{key:"peanut-butter",label:"Peanut butter, natural",cat:"🥜 Snacks"},{key:"coke-zero",label:"Coke Zero (slab)",cat:"🥤 Drinks"},{key:"cheese",label:"Tasty/cheddar cheese (block)",cat:"🧀 Dairy & Eggs"},{key:"crackers",label:"Seeded crackers (box)",cat:"🥜 Snacks"},{key:"rice-cakes",label:"Rice cakes",cat:"🥜 Snacks"},{key:"boil-eggs",label:"Boil 4–5 eggs (Sunday prep ⭐)",cat:"🧀 Dairy & Eggs"}].forEach(s=>{if(!seen.has(s.key)){seen.add(s.key);allItems.push(s);}});
   extras.forEach((e,i)=>allItems.push({key:`x${i}`,label:e,cat:"🧂 Pantry",extra:true,extraIdx:i}));
-  const cats={};allItems.forEach(item=>{if(!cats[item.cat])cats[item.cat]=[];cats[item.cat].push(item);});
-  const total=allItems.length;const done=Object.values(checked).filter(Boolean).length;
+  const visibleItems=allItems.filter(item=>!hidden[item.key]);
+  const cats={};visibleItems.forEach(item=>{if(!cats[item.cat])cats[item.cat]=[];cats[item.cat].push(item);});
+  const total=allItems.length;const remaining=visibleItems.length;const shopped=total-remaining;
   return(<div style={{padding:"16px"}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"3px"}}><h2 style={{color:DARK,fontSize:"22px",fontWeight:"bold"}}>Shopping List</h2><div style={{display:"flex",alignItems:"center",gap:"10px"}}><span style={{color:MED,fontFamily:"sans-serif",fontSize:"12px"}}>{done}/{total}</span>{done>0&&<button onClick={clearDone} style={{color:TC,fontFamily:"sans-serif",fontSize:"12px",border:"none",cursor:"pointer",background:"none"}}>Clear done</button>}</div></div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"3px"}}><h2 style={{color:DARK,fontSize:"22px",fontWeight:"bold"}}>Shopping List</h2><div style={{display:"flex",alignItems:"center",gap:"10px"}}><span style={{color:MED,fontFamily:"sans-serif",fontSize:"12px"}}>{remaining} left</span>{shopped>0&&<button onClick={restoreAll} style={{color:TC,fontFamily:"sans-serif",fontSize:"12px",border:"none",cursor:"pointer",background:"none"}}>Restore all</button>}</div></div>
     <p style={{color:MED,fontFamily:"sans-serif",fontSize:"12px",marginBottom:"10px"}}>From your week plan + weekly staples</p>
-    <div style={{height:"5px",borderRadius:"4px",background:LIGHT,marginBottom:"13px",overflow:"hidden"}}><div style={{width:`${total?done/total*100:0}%`,height:"100%",background:TC,borderRadius:"4px",transition:"width 0.3s"}}/></div>
+    <div style={{height:"5px",borderRadius:"4px",background:LIGHT,marginBottom:"13px",overflow:"hidden"}}><div style={{width:`${total?shopped/total*100:0}%`,height:"100%",background:TC,borderRadius:"4px",transition:"width 0.3s"}}/></div>
     <div style={{display:"flex",marginBottom:"16px"}}><input value={extra} onChange={e=>setExtra(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addExtra()} placeholder="Add extra item..." style={{flex:1,border:`1px solid ${LIGHT}`,borderRadius:"10px 0 0 10px",padding:"10px 13px",color:DARK,fontFamily:"sans-serif",fontSize:"13px",outline:"none",background:"#FFF"}}/><button onClick={addExtra} style={{background:TC,color:"#FAF7F2",borderRadius:"0 10px 10px 0",padding:"10px 15px",fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",border:"none",fontWeight:"600"}}>Add</button></div>
     {Object.entries(cats).map(([cat,items])=>(<div key={cat} style={{marginBottom:"16px"}}>
       <h3 style={{color:DARK,fontFamily:"sans-serif",fontSize:"12px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:"7px"}}>{cat}</h3>
       <div style={{borderRadius:"13px",overflow:"hidden",background:"#FFF",border:`1px solid ${LIGHT}`}}>
-        {items.map((item,i)=>(<div key={item.key} onClick={()=>toggle(item.key)} style={{display:"flex",alignItems:"center",gap:"10px",padding:"11px 13px",cursor:"pointer",borderBottom:i<items.length-1?`1px solid ${LIGHT}`:"none",background:checked[item.key]?CREAM:"#FFF"}}>
-          <div style={{width:"18px",height:"18px",borderRadius:"5px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${checked[item.key]?TC:LIGHT}`,background:checked[item.key]?TC:"transparent"}}>{checked[item.key]&&<span style={{color:"#FFF",fontSize:"10px",fontWeight:"bold"}}>✓</span>}</div>
-          <span style={{flex:1,color:checked[item.key]?MED:DARK,fontFamily:"sans-serif",fontSize:"13px",textDecoration:checked[item.key]?"line-through":"none"}}>{item.label}</span>
-          {item.extra&&<button onClick={e=>{e.stopPropagation();remExtra(item.extraIdx);}} style={{color:MED,fontSize:"16px",border:"none",cursor:"pointer",padding:"0 2px",background:"none"}}>×</button>}
+        {items.map((item,i)=>(<div key={item.key} style={{display:"flex",alignItems:"center",gap:"10px",padding:"11px 13px",borderBottom:i<items.length-1?`1px solid ${LIGHT}`:"none",background:"#FFF"}}>
+          <span style={{flex:1,color:DARK,fontFamily:"sans-serif",fontSize:"13px"}}>{item.label}</span>
+          <button onClick={()=>{if(item.extra){remExtra(item.extraIdx);}else{hideItem(item.key);}}} style={{color:MED,fontSize:"16px",border:"none",cursor:"pointer",padding:"0 4px",background:"none",flexShrink:0}}>×</button>
         </div>))}
       </div>
     </div>))}
