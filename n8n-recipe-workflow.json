@@ -1,0 +1,209 @@
+{
+  "name": "Recipe Extractor - Social Media",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "recipe-extract",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const url = $input.first().json.body.url;\nconst lowerUrl = url.toLowerCase();\n\nlet platform = 'unknown';\nlet actorId = '';\n\nif (lowerUrl.includes('facebook.com') || lowerUrl.includes('fb.watch') || lowerUrl.includes('fb.com')) {\n  platform = 'facebook';\n  actorId = 'apify~facebook-posts-scraper';\n} else if (lowerUrl.includes('instagram.com') || lowerUrl.includes('instagr.am')) {\n  platform = 'instagram';\n  actorId = 'apify~instagram-post-scraper';\n} else if (lowerUrl.includes('tiktok.com') || lowerUrl.includes('vm.tiktok')) {\n  platform = 'tiktok';\n  actorId = 'thenetaji~tiktok-post-scraper';\n}\n\nreturn [{ json: { url, platform, actorId } }];"
+      },
+      "name": "Detect Platform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{ $json.actorId }}/runs?waitForFinish=120",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.platform === 'facebook' ? '{\"startUrls\":[{\"url\":\"' + $json.url + '\"}],\"resultsLimit\":1,\"captionText\":true}' : $json.platform === 'instagram' ? '{\"directUrls\":[\"' + $json.url + '\"],\"resultsLimit\":1}' : '{\"postURLs\":[\"' + $json.url + '\"]}' }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "Call Apify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/datasets/{{ $json.data.defaultDatasetId }}/items?format=json&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "Get Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.first().json;\nconst item = Array.isArray(items) ? items[0] : items;\n\nlet recipeText = '';\n\nif (item.message && item.message.text) recipeText += item.message.text + '\\n\\n';\nif (item.text) recipeText += item.text + '\\n\\n';\nif (item.caption) recipeText += item.caption + '\\n\\n';\nif (item.description) recipeText += item.description + '\\n\\n';\n\nlet captionsUrl = '';\nif (item.short_form_video_context && item.short_form_video_context.playback_video && item.short_form_video_context.playback_video.captions_url) {\n  captionsUrl = item.short_form_video_context.playback_video.captions_url;\n}\n\nreturn [{ json: { recipeText: recipeText.trim(), captionsUrl, hasTranscript: !!captionsUrl } }];"
+      },
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.hasTranscript }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Transcript?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Extract Text').first().json.captionsUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "name": "Fetch Transcript",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const srtText = String($input.first().json.data || $input.first().json.body || '');\nconst prevData = $('Extract Text').first().json;\n\nconst cleanTranscript = srtText\n  .replace(/^\\d+$/gm, '')\n  .replace(/\\d{2}:\\d{2}:\\d{2},\\d{3}\\s*-->\\s*\\d{2}:\\d{2}:\\d{2},\\d{3}/g, '')\n  .replace(/\\n{2,}/g, ' ')\n  .trim();\n\nconst fullText = (prevData.recipeText + '\\n\\nVideo transcript: ' + cleanTranscript).trim();\n\nreturn [{ json: { recipeText: fullText } }];"
+      },
+      "name": "Parse Transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prevData = $('Extract Text').first().json;\nreturn [{ json: { recipeText: prevData.recipeText } }];"
+      },
+      "name": "Caption Only",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1500, messages: [{ role: 'user', content: 'Extract this recipe and return ONLY raw JSON (no markdown):\\n{\"name\":\"\",\"prep\":\"10\",\"cook\":\"20\",\"serves\":4,\"ingredients\":[{\"q\":\"2 cups\",\"u\":\"\",\"i\":\"flour\"}],\"steps\":[\"Step 1.\"],\"tags\":[\"dinner\"],\"notes\":\"\"}\\nIf the text does not contain a clear recipe, respond with: {\"error\":\"not_found\"}\\n\\nHere is recipe text from a social media post:\\n\\n' + $json.recipeText }] }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "Claude Extract",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const claudeResponse = $input.first().json;\nconst textContent = (claudeResponse.content || []).filter(b => b.type === 'text').map(b => b.text).join('');\n\nconst cleaned = textContent.replace(/```json|```/g, '').trim();\nconst jsonStart = cleaned.indexOf('{');\nconst jsonEnd = cleaned.lastIndexOf('}');\n\nif (jsonStart === -1 || jsonEnd === -1) {\n  return [{ json: { error: 'not_found' } }];\n}\n\ntry {\n  const recipe = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));\n  return [{ json: recipe }];\n} catch (e) {\n  return [{ json: { error: 'not_found' } }];\n}"
+      },
+      "name": "Parse Recipe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2440, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Detect Platform", "type": "main", "index": 0 }]]
+    },
+    "Detect Platform": {
+      "main": [[{ "node": "Call Apify", "type": "main", "index": 0 }]]
+    },
+    "Call Apify": {
+      "main": [[{ "node": "Get Results", "type": "main", "index": 0 }]]
+    },
+    "Get Results": {
+      "main": [[{ "node": "Extract Text", "type": "main", "index": 0 }]]
+    },
+    "Extract Text": {
+      "main": [[{ "node": "Has Transcript?", "type": "main", "index": 0 }]]
+    },
+    "Has Transcript?": {
+      "main": [
+        [{ "node": "Fetch Transcript", "type": "main", "index": 0 }],
+        [{ "node": "Caption Only", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Transcript": {
+      "main": [[{ "node": "Parse Transcript", "type": "main", "index": 0 }]]
+    },
+    "Parse Transcript": {
+      "main": [[{ "node": "Claude Extract", "type": "main", "index": 0 }]]
+    },
+    "Caption Only": {
+      "main": [[{ "node": "Claude Extract", "type": "main", "index": 0 }]]
+    },
+    "Claude Extract": {
+      "main": [[{ "node": "Parse Recipe", "type": "main", "index": 0 }]]
+    },
+    "Parse Recipe": {
+      "main": [[{ "node": "Respond", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
