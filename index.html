@@ -281,7 +281,23 @@ function AddRecipeView({recipes,apiKey,onSave}){
   const [mode,setMode]=useState("url");const [url,setUrl]=useState("");const [loading,setLoading]=useState(false);const [extracted,setExtracted]=useState(null);const [err,setErr]=useState("");const [saved,setSaved]=useState(false);const [m,setM]=useState({name:"",tags:"",prep:"",cook:"",serves:"1",ingredients:"",steps:"",notes:""});const photoRef=useRef();const [pasteText,setPasteText]=useState("");
   const EPROMPT=`Extract this recipe and return ONLY raw JSON (no markdown):\n{"name":"","prep":"10","cook":"20","serves":4,"ingredients":[{"q":"2 cups","u":"","i":"flour"}],"steps":["Step 1."],"tags":["dinner"],"notes":""}\nIf you cannot access the URL directly, search the web for the recipe by name or description. If you find it elsewhere, extract from there. If you truly cannot find the recipe, respond with: {"error":"not_found"}`;
   const parseJSON=text=>{const c=text.replace(/\`\`\`json|\`\`\`/g,"").trim();return JSON.parse(c.slice(c.indexOf("{"),c.lastIndexOf("}")+1));};
-  const extractViaSocial=async(targetUrl)=>{const res=await fetch("/api/social-extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:targetUrl})});if(!res.ok)throw new Error("Social extract failed");const{recipeText}=await res.json();if(!recipeText)throw new Error("No text found");const t=await callClaude(`${EPROMPT}\n\nHere is recipe text from a social media post:\n\n${recipeText}`,apiKey);return parseJSON(t);};
+  const extractViaSocial=async(targetUrl)=>{
+    const startRes=await fetch("/api/social-extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:targetUrl})});
+    if(!startRes.ok){const e=await startRes.json().catch(()=>({}));throw new Error(e.error||"Failed to start extraction");}
+    const{runId,datasetId}=await startRes.json();
+    if(!runId)throw new Error("No run ID");
+    let result=null;
+    for(let i=0;i<40;i++){
+      await new Promise(r=>setTimeout(r,3000));
+      const pollRes=await fetch(`/api/social-status?runId=${runId}&datasetId=${datasetId||""}`);
+      const poll=await pollRes.json();
+      if(poll.status==="done"){result=poll;break;}
+      if(poll.status==="failed")throw new Error(poll.error||"Extraction failed");
+    }
+    if(!result)throw new Error("Timed out waiting for results");
+    const t=await callClaude(`${EPROMPT}\n\nHere is recipe text from a social media post:\n\n${result.recipeText}`,apiKey);
+    return parseJSON(t);
+  };
   const extract=async()=>{if(!url.trim())return;setLoading(true);setErr("");setExtracted(null);try{if(isSocialMediaUrl(url)){const data=await extractViaSocial(url);if(data&&data.name){setExtracted({...data,id:`r${Date.now()}`,url});}else{setErr("social_failed");}setLoading(false);return;}const t=await callClaude(`${EPROMPT}\n\nURL: ${url}`,apiKey);const parsed=parseJSON(t);if(parsed.error==="not_found"){setErr("Couldn't find that recipe. Try 📋 Paste mode or 📷 Photo mode instead.");}else{setExtracted({...parsed,id:`r${Date.now()}`,url});}}catch{setErr("Couldn't extract automatically. Try 📋 Paste mode or ✏️ Manual entry.");}setLoading(false);};
   const extractPhoto=async(file)=>{setLoading(true);setErr("");setExtracted(null);try{const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});const t=await callClaude(`Look at this recipe image. ${EPROMPT}`,apiKey,{type:file.type||"image/jpeg",data:b64});setExtracted({...parseJSON(t),id:`r${Date.now()}`,url:""});}catch{setErr("Couldn't read the photo. Make sure the recipe is clear and well-lit.");}setLoading(false);};
   const extractPaste=async()=>{if(!pasteText.trim())return;setLoading(true);setErr("");setExtracted(null);try{const t=await callClaude(`${EPROMPT}\n\nHere is recipe text copied from social media or a website. Extract the recipe:\n\n${pasteText}`,apiKey);const parsed=parseJSON(t);if(parsed.error==="not_found"){setErr("Couldn't find a recipe in that text. Check you've pasted the full recipe.");}else{setExtracted({...parsed,id:`r${Date.now()}`,url:""});}}catch{setErr("Couldn't extract a recipe from that text. Check you've pasted the full recipe.");}setLoading(false);};
