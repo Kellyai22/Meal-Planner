@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   try {
     const lUrl = url.toLowerCase();
     let actorId = 'apify~facebook-posts-scraper';
-    let input = { startUrls: [url], resultsLimit: 1 };
+    let input = { startUrls: [{ url }], resultsLimit: 1 };
 
     if (lUrl.includes('instagram.com') || lUrl.includes('instagr.am')) {
       actorId = 'apify~instagram-post-scraper';
