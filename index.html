@@ -38,9 +38,9 @@
 const {useState,useRef}=React;
 const TC="#C4714F",CREAM="#FAF7F2",DARK="#3D2E26",MED="#8C7E74",LIGHT="#EAE5DF",CLIGHT="#FDF0EA";
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-const MEALS=["breakfast","snack","lunch","dinner"];
-const MLABEL={breakfast:"Breakfast",snack:"Snack",lunch:"Lunch",dinner:"Dinner"};
-const MEMOJI={breakfast:"🍳",snack:"🥜",lunch:"🥗",dinner:"🍽️"};
+const MEALS=["breakfast","snack","lunch","dinner","dessert"];
+const MLABEL={breakfast:"Breakfast",snack:"Snack",lunch:"Lunch",dinner:"Dinner",dessert:"Dessert"};
+const MEMOJI={breakfast:"🍳",snack:"🥜",lunch:"🥗",dinner:"🍽️",dessert:"🍰"};
 const load=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}};
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 
@@ -61,7 +61,7 @@ const SEEDS=[
   {id:"s14",name:"Slow-Cooked Lamb or Pork",tags:["dinner","lamb","pork","weekend","slow cook"],prep:"10",cook:"240",serves:6,produces:["leftover pork","leftover lamb"],ingredients:[{q:"1.5kg",u:"",i:"pork shoulder or lamb shoulder"},{q:"1",u:"",i:"onion, quartered"},{q:"4 cloves",u:"",i:"garlic"},{q:"1 cup",u:"",i:"chicken or beef stock"},{q:"2 tbsp",u:"",i:"olive oil"},{q:"",u:"",i:"salt, pepper, rosemary, thyme"}],steps:["Preheat oven to 160°C or use slow cooker.","Brown meat all over in a hot pan with olive oil. Season well.","Place in roasting dish or slow cooker with onion, garlic and stock.","Cook: oven 3.5-4 hours, slow cooker 6-8 hours on low.","Meat should pull apart easily. Rest 20 minutes before serving."],notes:"Use leftover pork in fried rice or tacos. Leftover lamb in wraps with tzatziki.",url:""},
 ];
 
-const emptyWeek=()=>DAYS.reduce((a,d)=>{a[d.toLowerCase()]={breakfast:"",snack:"",lunch:"",dinner:""};return a;},{});
+const emptyWeek=()=>DAYS.reduce((a,d)=>{a[d.toLowerCase()]={breakfast:"",snack:"",lunch:"",dinner:"",dessert:""};return a;},{});
 const todayName=()=>{const d=new Date().getDay();return DAYS[d===0?6:d-1];};
 const isSocialMediaUrl=(url)=>{const u=url.toLowerCase();return/(facebook\.com|fb\.watch|fb\.com|instagram\.com|instagr\.am|tiktok\.com|vm\.tiktok|threads\.net)/.test(u);};
 
@@ -279,7 +279,7 @@ function RecipesView({recipes,onViewRecipe}){
 
 function AddRecipeView({recipes,apiKey,onSave}){
   const [mode,setMode]=useState("url");const [url,setUrl]=useState("");const [loading,setLoading]=useState(false);const [extracted,setExtracted]=useState(null);const [err,setErr]=useState("");const [saved,setSaved]=useState(false);const [m,setM]=useState({name:"",tags:"",prep:"",cook:"",serves:"1",ingredients:"",steps:"",notes:""});const photoRef=useRef();const [pasteText,setPasteText]=useState("");
-  const EPROMPT=`Extract this recipe and return ONLY raw JSON (no markdown):\n{"name":"","prep":"10","cook":"20","serves":4,"ingredients":[{"q":"2 cups","u":"","i":"flour"}],"steps":["Step 1."],"tags":["dinner"],"notes":""}\nIf you cannot access the URL directly, search the web for the recipe by name or description. If you find it elsewhere, extract from there. If you truly cannot find the recipe, respond with: {"error":"not_found"}`;
+  const EPROMPT=`Extract this recipe and return ONLY raw JSON (no markdown):\n{"name":"","prep":"10","cook":"20","serves":4,"ingredients":[{"q":"2 cups","u":"","i":"flour"}],"steps":["Step 1."],"tags":["dinner or breakfast or snack or lunch or dessert"],"notes":""}\nIf you cannot access the URL directly, search the web for the recipe by name or description. If you find it elsewhere, extract from there. If you truly cannot find the recipe, respond with: {"error":"not_found"}`;
   const parseJSON=text=>{const c=text.replace(/\`\`\`json|\`\`\`/g,"").trim();return JSON.parse(c.slice(c.indexOf("{"),c.lastIndexOf("}")+1));};
   const extractViaSocial=async(targetUrl)=>{
     const startRes=await fetch("/api/social-extract",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:targetUrl})});
@@ -409,7 +409,7 @@ function RecipeModal({recipe,onClose,onDelete}){
 
 function MealPickerModal({day,meal,recipes,currentVal,onSelect,onClose}){
   const [search,setSearch]=useState("");const [custom,setCustom]=useState("");
-  const tags={breakfast:["breakfast"],snack:[],lunch:["lunch","no-cook"],dinner:["dinner"]}[meal]||[];
+  const tags={breakfast:["breakfast"],snack:[],lunch:["lunch","no-cook"],dinner:["dinner"],dessert:["dessert"]}[meal]||[];
   const filtered=search?recipes.filter(r=>r.name.toLowerCase().includes(search.toLowerCase())||r.tags?.some(t=>t.includes(search.toLowerCase()))):recipes.filter(r=>tags.length===0||r.tags?.some(t=>tags.includes(t)));
   return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(61,46,38,0.5)",display:"flex",alignItems:"flex-end"}}>
     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:"600px",margin:"0 auto",borderRadius:"22px 22px 0 0",background:"#FFF",maxHeight:"80dvh",display:"flex",flexDirection:"column"}}>
