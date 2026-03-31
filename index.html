@@ -67,45 +67,32 @@ const isSocialMediaUrl=(url)=>{const u=url.toLowerCase();return/(facebook\.com|f
 
 const categorize=(i="")=>{const t=i.toLowerCase();if(/(chicken|beef|mince|pork|lamb|bacon|turkey|ham|salami|steak)/.test(t))return"🥩 Meat";if(/(salmon|tuna|fish|barramundi|snapper)/.test(t))return"🐟 Fish";if(/(milk|yoghurt|cheese|butter|cream|egg|feta|parmesan|brie|cheddar)/.test(t))return"🧀 Dairy & Eggs";if(/(spinach|tomato|capsicum|broccoli|onion|garlic|potato|carrot|bean|lettuce|avocado|cucumber|cabbage|spring onion|mushroom|peas)/.test(t))return"🥬 Vegetables";if(/(banana|apple|berry|berries|mango|lemon|lime)/.test(t))return"🍎 Fruit";if(/frozen/.test(t))return"❄️ Frozen";if(/(nut|macadamia|peanut|chocolate|cracker|rice cake|granola|peanut butter)/.test(t))return"🥜 Snacks";if(/(coke|soda|water|juice|tea|red bull|drink)/.test(t))return"🥤 Drinks";return"🧂 Pantry";};
 
-async function callClaude(prompt,apiKey,imageData=null){
+async function callClaude(prompt,imageData=null){
   const content=imageData?[{type:"image",source:{type:"base64",media_type:imageData.type,data:imageData.data}},{type:"text",text:prompt}]:prompt;
   const body={model:"claude-sonnet-4-20250514",max_tokens:1500,messages:[{role:"user",content}]};
   if(!imageData)body.tools=[{type:"web_search_20250305",name:"web_search"}];
-  let res;
-  if(apiKey){res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify(body)});}
-  else{res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});}
+  const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   if(!res.ok){const e=await res.json();throw new Error(e.error?.message||"API error");}
   const data=await res.json();
   return data.content?.filter(b=>b.type==="text").map(b=>b.text).join("")||"";
 }
 
 function SetupScreen({onDone}){
-  const [key,setKey]=useState("");const [testing,setTesting]=useState(false);const [err,setErr]=useState("");const [mode,setMode]=useState("choose");
-  const test=async()=>{if(!key.trim())return;setTesting(true);setErr("");try{await callClaude("Say OK.",key.trim());save("mp_apikey",key.trim());onDone(key.trim());}catch(e){setErr("Key didn't work — double check and try again.");}setTesting(false);};
-  const skipSetup=async()=>{setTesting(true);setErr("");try{await callClaude("Say OK.","");save("mp_apikey","");onDone("");}catch(e){setErr("Something went wrong. Try using your own API key instead.");}setTesting(false);};
+  const [testing,setTesting]=useState(false);const [err,setErr]=useState("");
+  const start=async()=>{setTesting(true);setErr("");try{await callClaude("Say OK.");save("mp_setup_done",true);onDone();}catch(e){setErr("Something went wrong. Please try again.");}setTesting(false);};
   return(<div style={{minHeight:"100dvh",background:CREAM,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px"}}>
     <div style={{maxWidth:"380px",width:"100%"}}>
       <div style={{textAlign:"center",marginBottom:"28px"}}><div style={{fontSize:"52px",marginBottom:"10px"}}>🍽️</div><h1 style={{color:DARK,fontSize:"24px",fontWeight:"bold",marginBottom:"4px"}}>Meal Planner</h1><p style={{color:MED,fontFamily:"sans-serif",fontSize:"13px"}}>Protein-first · Strategic · Zero waste</p></div>
-      {mode==="choose"&&<div style={{background:"#FFF",borderRadius:"20px",padding:"22px",border:`1px solid ${LIGHT}`,boxShadow:"0 2px 16px rgba(61,46,38,0.08)"}}>
+      <div style={{background:"#FFF",borderRadius:"20px",padding:"22px",border:`1px solid ${LIGHT}`,boxShadow:"0 2px 16px rgba(61,46,38,0.08)"}}>
         <h2 style={{color:DARK,fontFamily:"sans-serif",fontSize:"15px",fontWeight:"700",marginBottom:"12px"}}>Get started</h2>
-        <button onClick={skipSetup} disabled={testing} style={{width:"100%",background:TC,color:"#FAF7F2",borderRadius:"10px",padding:"15px",fontFamily:"sans-serif",fontSize:"14px",fontWeight:"700",cursor:testing?"default":"pointer",border:"none",marginBottom:"10px"}}>{testing?"Connecting…":"Start — no setup needed"}</button>
-        <button onClick={()=>setMode("byok")} style={{width:"100%",background:"none",color:MED,borderRadius:"10px",padding:"10px",fontFamily:"sans-serif",fontSize:"12px",cursor:"pointer",border:`1px solid ${LIGHT}`}}>I have my own Anthropic API key</button>
+        <button onClick={start} disabled={testing} style={{width:"100%",background:TC,color:"#FAF7F2",borderRadius:"10px",padding:"15px",fontFamily:"sans-serif",fontSize:"14px",fontWeight:"700",cursor:testing?"default":"pointer",border:"none"}}>{testing?"Connecting…":"Get Started"}</button>
         {err&&<p style={{color:"#991B1B",fontFamily:"sans-serif",fontSize:"12px",marginTop:"10px"}}>{err}</p>}
-      </div>}
-      {mode==="byok"&&<div style={{background:"#FFF",borderRadius:"20px",padding:"22px",border:`1px solid ${LIGHT}`,boxShadow:"0 2px 16px rgba(61,46,38,0.08)"}}>
-        <h2 style={{color:DARK,fontFamily:"sans-serif",fontSize:"15px",fontWeight:"700",marginBottom:"6px"}}>Enter your Anthropic API key</h2>
-        <p style={{color:MED,fontFamily:"sans-serif",fontSize:"12px",lineHeight:"1.6",marginBottom:"14px"}}>Go to <strong style={{color:DARK}}>console.anthropic.com</strong> → API Keys → copy your key.</p>
-        <input type="password" value={key} onChange={e=>{setKey(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&test()} placeholder="sk-ant-..." style={{width:"100%",border:`1px solid ${LIGHT}`,borderRadius:"10px",padding:"12px 14px",color:DARK,fontSize:"14px",outline:"none",marginBottom:"10px",display:"block"}}/>
-        {err&&<p style={{color:"#991B1B",fontFamily:"sans-serif",fontSize:"12px",marginBottom:"10px"}}>{err}</p>}
-        <button onClick={test} disabled={!key.trim()||testing} style={{width:"100%",background:key.trim()&&!testing?TC:LIGHT,color:key.trim()&&!testing?"#FAF7F2":MED,borderRadius:"10px",padding:"13px",fontFamily:"sans-serif",fontSize:"14px",fontWeight:"700",cursor:key.trim()&&!testing?"pointer":"default",border:"none",marginBottom:"8px"}}>{testing?"Testing…":"Save & Start"}</button>
-        <button onClick={()=>setMode("choose")} style={{width:"100%",background:"none",color:MED,borderRadius:"10px",padding:"8px",fontFamily:"sans-serif",fontSize:"12px",cursor:"pointer",border:"none"}}>← Back</button>
-        <p style={{color:MED,fontFamily:"sans-serif",fontSize:"11px",marginTop:"6px",textAlign:"center"}}>🔒 Stored only on this device. Never shared.</p>
-      </div>}
+      </div>
     </div>
   </div>);
 }
 
-function SettingsModal({onClose,apiKey,onResetKey}){
+function SettingsModal({onClose}){
   const [excl,setExcl]=useState(()=>load("mp_excl_v3",["celery"]));
   const [inp,setInp]=useState("");
   const add=()=>{if(!inp.trim())return;const e=[...excl,inp.trim().toLowerCase()];setExcl(e);save("mp_excl_v3",e);setInp("");};
@@ -120,21 +107,17 @@ function SettingsModal({onClose,apiKey,onResetKey}){
         <div style={{display:"flex",flexWrap:"wrap",gap:"8px",marginBottom:"12px"}}>
           {excl.map((e,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:"6px",background:CLIGHT,borderRadius:"20px",padding:"6px 12px"}}><span style={{color:DARK,fontFamily:"sans-serif",fontSize:"13px",textTransform:"capitalize"}}>{e}</span><button onClick={()=>rem(i)} style={{color:TC,fontSize:"16px",lineHeight:1,border:"none",cursor:"pointer"}}>×</button></div>))}
         </div>
-        <div style={{display:"flex",gap:"0",marginBottom:"24px"}}>
+        <div style={{display:"flex",gap:"0"}}>
           <input value={inp} onChange={e=>setInp(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="Add ingredient to avoid..." style={{flex:1,border:`1px solid ${LIGHT}`,borderRadius:"10px 0 0 10px",padding:"10px 13px",color:DARK,fontFamily:"sans-serif",fontSize:"13px",outline:"none",background:"#FFF"}}/>
           <button onClick={add} style={{background:TC,color:"#FAF7F2",borderRadius:"0 10px 10px 0",padding:"10px 16px",fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",border:"none"}}>Add</button>
         </div>
-        <div style={{height:"1px",background:LIGHT,marginBottom:"20px"}}/>
-        <h4 style={{color:DARK,fontFamily:"sans-serif",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"6px"}}>🔑 API Key</h4>
-        <p style={{color:MED,fontFamily:"sans-serif",fontSize:"12px",marginBottom:"10px"}}>Current: <span style={{color:DARK,fontFamily:"monospace"}}>sk-ant-...{apiKey.slice(-6)}</span></p>
-        <button onClick={onResetKey} style={{border:`1px solid ${LIGHT}`,color:MED,borderRadius:"10px",padding:"10px 18px",fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",background:"none"}}>Change API Key</button>
       </div>
     </div>
   </div>);
 }
 
 function App(){
-  const [apiKey,setApiKey]=useState(()=>load("mp_apikey",""));
+  const [setupDone,setSetupDone]=useState(()=>{if(load("mp_setup_done",false))return true;if(localStorage.getItem("mp_apikey")!==null){save("mp_setup_done",true);return true;}return false;});
   const [recipes,setRecipes]=useState(()=>{const r=load("mp_recipes_v3",null);return r&&r.length?r:SEEDS;});
   const [weekPlan,setWeekPlan]=useState(()=>load("mp_weekplan_v3",emptyWeek()));
   const [tab,setTab]=useState("today");
@@ -151,7 +134,7 @@ function App(){
     const r=recipes.filter(r=>r.id!==id);saveRecipes(r);
     const w={...weekPlan};DAYS.forEach(d=>{const dl=d.toLowerCase();MEALS.forEach(m=>{if(w[dl]?.[m]===id)w[dl][m]="";});});saveWeekPlan(w);setViewRecipe(null);
   };
-  if(!apiKey)return<SetupScreen onDone={k=>setApiKey(k)}/>;
+  if(!setupDone)return<SetupScreen onDone={()=>setSetupDone(true)}/>;
   const nav=[{id:"today",e:"☀️",l:"Today"},{id:"week",e:"📅",l:"Week"},{id:"recipes",e:"📖",l:"Recipes"},{id:"add",e:"➕",l:"Add"},{id:"shop",e:"🛒",l:"Shop"}];
   return(<div style={{background:CREAM,minHeight:"100dvh",paddingBottom:"68px"}}>
     <div style={{background:DARK,padding:"14px 16px",paddingTop:"calc(14px + env(safe-area-inset-top))",position:"sticky",top:0,zIndex:10}}>
@@ -164,7 +147,7 @@ function App(){
       {tab==="today"&&<TodayView today={today} weekPlan={weekPlan} recipes={recipes} onViewRecipe={setViewRecipe} onPickMeal={setPickMeal} onShowPlanner={()=>{setTab("week");setTimeout(()=>setShowPlanner(true),50);}}/>}
       {tab==="week"&&<WeekView weekPlan={weekPlan} recipes={recipes} today={today} onPickMeal={setPickMeal} onViewRecipe={setViewRecipe} onShowPlanner={()=>setShowPlanner(true)}/>}
       {tab==="recipes"&&<RecipesView recipes={recipes} onViewRecipe={setViewRecipe}/>}
-      {tab==="add"&&<AddRecipeView recipes={recipes} apiKey={apiKey} onSave={saveRecipes}/>}
+      {tab==="add"&&<AddRecipeView recipes={recipes} onSave={saveRecipes}/>}
       {tab==="shop"&&<ShoppingView weekPlan={weekPlan} recipes={recipes}/>}
     </div>
     <nav style={{position:"fixed",bottom:0,left:0,right:0,background:"#FFF",borderTop:`1px solid ${LIGHT}`,zIndex:10,paddingBottom:"env(safe-area-inset-bottom)"}}>
@@ -174,8 +157,8 @@ function App(){
     </nav>
     {viewRecipe&&<RecipeModal recipe={viewRecipe} onClose={()=>setViewRecipe(null)} onDelete={deleteRecipe}/>}
     {pickMeal&&<MealPickerModal day={pickMeal.day} meal={pickMeal.meal} recipes={recipes} currentVal={getMV(pickMeal.day,pickMeal.meal)} onSelect={v=>{setMeal(pickMeal.day,pickMeal.meal,v);setPickMeal(null);}} onClose={()=>setPickMeal(null)}/>}
-    {showPlanner&&<AIPlannerModal recipes={recipes} apiKey={apiKey} exclusions={load("mp_excl_v3",["celery"])} onApply={plan=>{saveWeekPlan(plan);setShowPlanner(false);setTab("week");}} onClose={()=>setShowPlanner(false)}/>}
-    {showSettings&&<SettingsModal apiKey={apiKey} onClose={()=>setShowSettings(false)} onResetKey={()=>{save("mp_apikey","");setApiKey("");setShowSettings(false);}}/>}
+    {showPlanner&&<AIPlannerModal recipes={recipes} exclusions={load("mp_excl_v3",["celery"])} onApply={plan=>{saveWeekPlan(plan);setShowPlanner(false);setTab("week");}} onClose={()=>setShowPlanner(false)}/>}
+    {showSettings&&<SettingsModal onClose={()=>setShowSettings(false)}/>}
   </div>);
 }
 
@@ -277,7 +260,7 @@ function RecipesView({recipes,onViewRecipe}){
   </div>);
 }
 
-function AddRecipeView({recipes,apiKey,onSave}){
+function AddRecipeView({recipes,onSave}){
   const [mode,setMode]=useState("url");const [url,setUrl]=useState("");const [loading,setLoading]=useState(false);const [extracted,setExtracted]=useState(null);const [err,setErr]=useState("");const [saved,setSaved]=useState(false);const [m,setM]=useState({name:"",tags:"",prep:"",cook:"",serves:"1",ingredients:"",steps:"",notes:""});const photoRef=useRef();const [pasteText,setPasteText]=useState("");
   const EPROMPT=`Extract this recipe and return ONLY raw JSON (no markdown):\n{"name":"","prep":"10","cook":"20","serves":4,"ingredients":[{"q":"2 cups","u":"","i":"flour"}],"steps":["Step 1."],"tags":["dinner or breakfast or snack or lunch or dessert"],"notes":""}\nIf you cannot access the URL directly, search the web for the recipe by name or description. If you find it elsewhere, extract from there. If you truly cannot find the recipe, respond with: {"error":"not_found"}`;
   const parseJSON=text=>{const c=text.replace(/\`\`\`json|\`\`\`/g,"").trim();return JSON.parse(c.slice(c.indexOf("{"),c.lastIndexOf("}")+1));};
@@ -295,12 +278,12 @@ function AddRecipeView({recipes,apiKey,onSave}){
       if(poll.status==="failed")throw new Error(poll.error||"Extraction failed");
     }
     if(!result)throw new Error("Timed out waiting for results");
-    const t=await callClaude(`${EPROMPT}\n\nHere is recipe text from a social media post:\n\n${result.recipeText}`,apiKey);
+    const t=await callClaude(`${EPROMPT}\n\nHere is recipe text from a social media post:\n\n${result.recipeText}`);
     return parseJSON(t);
   };
-  const extract=async()=>{if(!url.trim())return;setLoading(true);setErr("");setExtracted(null);try{if(isSocialMediaUrl(url)){const data=await extractViaSocial(url);if(data&&data.name){setExtracted({...data,id:`r${Date.now()}`,url});}else{setErr("social_failed");}setLoading(false);return;}const t=await callClaude(`${EPROMPT}\n\nURL: ${url}`,apiKey);const parsed=parseJSON(t);if(parsed.error==="not_found"){setErr("Couldn't find that recipe. Try 📋 Paste mode or 📷 Photo mode instead.");}else{setExtracted({...parsed,id:`r${Date.now()}`,url});}}catch{setErr("Couldn't extract automatically. Try 📋 Paste mode or ✏️ Manual entry.");}setLoading(false);};
-  const extractPhoto=async(file)=>{setLoading(true);setErr("");setExtracted(null);try{const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});const t=await callClaude(`Look at this recipe image. ${EPROMPT}`,apiKey,{type:file.type||"image/jpeg",data:b64});setExtracted({...parseJSON(t),id:`r${Date.now()}`,url:""});}catch{setErr("Couldn't read the photo. Make sure the recipe is clear and well-lit.");}setLoading(false);};
-  const extractPaste=async()=>{if(!pasteText.trim())return;setLoading(true);setErr("");setExtracted(null);try{const t=await callClaude(`${EPROMPT}\n\nHere is recipe text copied from social media or a website. Extract the recipe:\n\n${pasteText}`,apiKey);const parsed=parseJSON(t);if(parsed.error==="not_found"){setErr("Couldn't find a recipe in that text. Check you've pasted the full recipe.");}else{setExtracted({...parsed,id:`r${Date.now()}`,url:""});}}catch{setErr("Couldn't extract a recipe from that text. Check you've pasted the full recipe.");}setLoading(false);};
+  const extract=async()=>{if(!url.trim())return;setLoading(true);setErr("");setExtracted(null);try{if(isSocialMediaUrl(url)){const data=await extractViaSocial(url);if(data&&data.name){setExtracted({...data,id:`r${Date.now()}`,url});}else{setErr("social_failed");}setLoading(false);return;}const t=await callClaude(`${EPROMPT}\n\nURL: ${url}`);const parsed=parseJSON(t);if(parsed.error==="not_found"){setErr("Couldn't find that recipe. Try 📋 Paste mode or 📷 Photo mode instead.");}else{setExtracted({...parsed,id:`r${Date.now()}`,url});}}catch{setErr("Couldn't extract automatically. Try 📋 Paste mode or ✏️ Manual entry.");}setLoading(false);};
+  const extractPhoto=async(file)=>{setLoading(true);setErr("");setExtracted(null);try{const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);});const t=await callClaude(`Look at this recipe image. ${EPROMPT}`,{type:file.type||"image/jpeg",data:b64});setExtracted({...parseJSON(t),id:`r${Date.now()}`,url:""});}catch{setErr("Couldn't read the photo. Make sure the recipe is clear and well-lit.");}setLoading(false);};
+  const extractPaste=async()=>{if(!pasteText.trim())return;setLoading(true);setErr("");setExtracted(null);try{const t=await callClaude(`${EPROMPT}\n\nHere is recipe text copied from social media or a website. Extract the recipe:\n\n${pasteText}`);const parsed=parseJSON(t);if(parsed.error==="not_found"){setErr("Couldn't find a recipe in that text. Check you've pasted the full recipe.");}else{setExtracted({...parsed,id:`r${Date.now()}`,url:""});}}catch{setErr("Couldn't extract a recipe from that text. Check you've pasted the full recipe.");}setLoading(false);};
   const saveEx=()=>{onSave([...recipes,extracted]);setSaved(true);setExtracted(null);setUrl("");setTimeout(()=>setSaved(false),3000);};
   const saveM=()=>{if(!m.name.trim())return;const r={id:`r${Date.now()}`,name:m.name.trim(),tags:m.tags.split(",").map(t=>t.trim()).filter(Boolean),prep:m.prep,cook:m.cook,serves:parseInt(m.serves)||1,ingredients:m.ingredients.split("\n").filter(l=>l.trim()).map(line=>{const mt=line.trim().match(/^([\d½¼¾]+\s*(?:tbsp|tsp|cups?|g|kg|ml|bunch|handful|tin|cloves?)?\s*)(.*)/i);return mt?{q:mt[1].trim(),u:"",i:mt[2].trim()}:{q:"",u:"",i:line.trim()};}),steps:m.steps.split("\n").filter(l=>l.trim()),notes:m.notes,url:""};onSave([...recipes,r]);setSaved(true);setM({name:"",tags:"",prep:"",cook:"",serves:"1",ingredients:"",steps:"",notes:""});setTimeout(()=>setSaved(false),3000);};
   const inp={border:`1px solid ${LIGHT}`,borderRadius:"10px",padding:"10px 13px",color:DARK,fontFamily:"sans-serif",fontSize:"14px",outline:"none",width:"100%",display:"block",background:"#FFF"};
@@ -428,7 +411,7 @@ function MealPickerModal({day,meal,recipes,currentVal,onSelect,onClose}){
   </div>);
 }
 
-function AIPlannerModal({recipes,apiKey,exclusions,onApply,onClose}){
+function AIPlannerModal({recipes,exclusions,onApply,onClose}){
   const [mode,setMode]=useState("choose");const [selected,setSelected]=useState([]);const [loading,setLoading]=useState(false);const [plan,setPlan]=useState(null);const [reasoning,setReasoning]=useState("");const [err,setErr]=useState("");
   const dinners=recipes.filter(r=>r.tags?.includes("dinner"));
   const toggle=id=>setSelected(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
@@ -437,7 +420,7 @@ function AIPlannerModal({recipes,apiKey,exclusions,onApply,onClose}){
     const list=recipes.map(r=>({id:r.id,name:r.name,tags:r.tags||[],produces:r.produces||[],uses:r.uses||[]}));
     const excl=exclusions?.length?`Avoid recipes containing: ${exclusions.join(", ")}.`:"";
     const prompt=`Strategic meal planner. Maximise ingredient reuse, minimise waste.\n\nRecipes: ${JSON.stringify(list)}\n${excl}\n${mode==="choose"?`User wants these dinners: ${selected.map(id=>recipes.find(r=>r.id===id)?.name).filter(Boolean).join(", ")}. Choose breakfasts, snacks and lunches strategically.`:"Choose best 7 dinners and all meals for maximum ingredient reuse."}\n\nRULES: After s9 (curry, produces leftover rice) schedule s10 (egg fried rice) within 1-2 days. After s11 (roast chicken) use leftover chicken next day lunch. Vary proteins nightly. Snacks can be text like "Macadamias + cheese". Breakfasts can be text if no recipe fits.\n\nReturn ONLY raw JSON:\n{"plan":{"monday":{"breakfast":"","snack":"","lunch":"","dinner":""},"tuesday":{"breakfast":"","snack":"","lunch":"","dinner":""},"wednesday":{"breakfast":"","snack":"","lunch":"","dinner":""},"thursday":{"breakfast":"","snack":"","lunch":"","dinner":""},"friday":{"breakfast":"","snack":"","lunch":"","dinner":""},"saturday":{"breakfast":"","snack":"","lunch":"","dinner":""},"sunday":{"breakfast":"","snack":"","lunch":"","dinner":""}},"reasoning":"2 sentences on strategic ingredient reuse."}`;
-    try{const t=await callClaude(prompt,apiKey);const c=t.replace(/```json|```/g,"").trim();const j=JSON.parse(c.slice(c.indexOf("{"),c.lastIndexOf("}")+1));setPlan(j.plan);setReasoning(j.reasoning||"");}catch(e){setErr("Couldn't generate — please try again.");}
+    try{const t=await callClaude(prompt);const c=t.replace(/```json|```/g,"").trim();const j=JSON.parse(c.slice(c.indexOf("{"),c.lastIndexOf("}")+1));setPlan(j.plan);setReasoning(j.reasoning||"");}catch(e){setErr("Couldn't generate — please try again.");}
     setLoading(false);
   };
   const getName=val=>{if(!val)return"—";const r=recipes.find(r=>r.id===val);return r?r.name:val;};
