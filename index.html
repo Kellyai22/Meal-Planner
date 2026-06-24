@@ -67,6 +67,25 @@ const isSocialMediaUrl=(url)=>{const u=url.toLowerCase();return/(facebook\.com|f
 
 const categorize=(i="")=>{const t=i.toLowerCase();if(/(chicken|beef|mince|pork|lamb|bacon|turkey|ham|salami|steak)/.test(t))return"🥩 Meat";if(/(salmon|tuna|fish|barramundi|snapper)/.test(t))return"🐟 Fish";if(/(milk|yoghurt|cheese|butter|cream|egg|feta|parmesan|brie|cheddar)/.test(t))return"🧀 Dairy & Eggs";if(/(spinach|tomato|capsicum|broccoli|onion|garlic|potato|carrot|bean|lettuce|avocado|cucumber|cabbage|spring onion|mushroom|peas)/.test(t))return"🥬 Vegetables";if(/(banana|apple|berry|berries|mango|lemon|lime)/.test(t))return"🍎 Fruit";if(/frozen/.test(t))return"❄️ Frozen";if(/(nut|macadamia|peanut|chocolate|cracker|rice cake|granola|peanut butter)/.test(t))return"🥜 Snacks";if(/(coke|soda|water|juice|tea|red bull|drink)/.test(t))return"🥤 Drinks";return"🧂 Pantry";};
 
+function compressImage(file,maxEdge=900,quality=0.7){
+  return new Promise((res,rej)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        if(w>h){if(w>maxEdge){h=Math.round(h*maxEdge/w);w=maxEdge;}}
+        else{if(h>maxEdge){w=Math.round(w*maxEdge/h);h=maxEdge;}}
+        const canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,w,h);
+        try{res(canvas.toDataURL("image/jpeg",quality));}catch(err){rej(err);}
+      };
+      img.onerror=rej;img.src=e.target.result;
+    };
+    reader.onerror=rej;reader.readAsDataURL(file);
+  });
+}
+
 async function callClaude(prompt,imageData=null){
   const content=imageData?[{type:"image",source:{type:"base64",media_type:imageData.type,data:imageData.data}},{type:"text",text:prompt}]:prompt;
   const body={model:"claude-haiku-4-5",max_tokens:1500,messages:[{role:"user",content}]};
@@ -126,6 +145,7 @@ function App(){
   const [showPlanner,setShowPlanner]=useState(false);
   const [showSettings,setShowSettings]=useState(false);
   const saveRecipes=r=>{setRecipes(r);save("mp_recipes_v3",r);};
+  const updateRecipe=updated=>{const r=recipes.map(x=>x.id===updated.id?updated:x);saveRecipes(r);setViewRecipe(updated);};
   const saveWeekPlan=w=>{setWeekPlan(w);save("mp_weekplan_v3",w);};
   const today=todayName();
   const getMV=(day,meal)=>weekPlan[day.toLowerCase()]?.[meal]||"";
@@ -155,7 +175,7 @@ function App(){
         {nav.map(t=>(<button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"9px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:"2px",color:tab===t.id?TC:MED,border:"none",cursor:"pointer",background:"none"}}><span style={{fontSize:"18px"}}>{t.e}</span><span style={{fontFamily:"sans-serif",fontSize:"9px",letterSpacing:"0.05em",textTransform:"uppercase",fontWeight:tab===t.id?"700":"400"}}>{t.l}</span></button>))}
       </div>
     </nav>
-    {viewRecipe&&<RecipeModal recipe={viewRecipe} onClose={()=>setViewRecipe(null)} onDelete={deleteRecipe}/>}
+    {viewRecipe&&<RecipeModal recipe={viewRecipe} onClose={()=>setViewRecipe(null)} onDelete={deleteRecipe} onUpdate={updateRecipe}/>}
     {pickMeal&&<MealPickerModal day={pickMeal.day} meal={pickMeal.meal} recipes={recipes} currentVal={getMV(pickMeal.day,pickMeal.meal)} onSelect={v=>{setMeal(pickMeal.day,pickMeal.meal,v);setPickMeal(null);}} onClose={()=>setPickMeal(null)}/>}
     {showPlanner&&<AIPlannerModal recipes={recipes} exclusions={load("mp_excl_v3",["celery"])} onApply={plan=>{saveWeekPlan(plan);setShowPlanner(false);setTab("week");}} onClose={()=>setShowPlanner(false)}/>}
     {showSettings&&<SettingsModal onClose={()=>setShowSettings(false)}/>}
@@ -247,7 +267,7 @@ function RecipesView({recipes,onViewRecipe}){
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
       {filtered.map(r=>(<div key={r.id} onClick={()=>onViewRecipe(r)} style={{borderRadius:"14px",padding:"12px",cursor:"pointer",background:"#FFF",border:`1px solid ${LIGHT}`,boxShadow:"0 1px 4px rgba(61,46,38,0.04)"}}>
-        <div style={{fontSize:"21px",marginBottom:"6px"}}>{getE(r)}</div>
+        {r.photo?<div style={{margin:"-12px -12px 8px",borderRadius:"14px 14px 0 0",overflow:"hidden"}}><img src={r.photo} alt={r.name} style={{width:"100%",height:"82px",objectFit:"cover",display:"block"}}/></div>:<div style={{fontSize:"21px",marginBottom:"6px"}}>{getE(r)}</div>}
         <p style={{color:DARK,fontFamily:"sans-serif",fontSize:"13px",fontWeight:"600",marginBottom:"3px",lineHeight:"1.3"}}>{r.name}</p>
         <p style={{color:MED,fontFamily:"sans-serif",fontSize:"11px"}}>{r.prep}m prep · Serves {r.serves}</p>
         <div style={{display:"flex",gap:"4px",flexWrap:"wrap",marginTop:"6px"}}>
@@ -363,13 +383,39 @@ function ShoppingView({weekPlan,recipes}){
   </div>);
 }
 
-function RecipeModal({recipe,onClose,onDelete}){
+function RecipeModal({recipe,onClose,onDelete,onUpdate}){
   const [conf,setConf]=useState(false);
+  const [editing,setEditing]=useState(false);
+  const [ed,setEd]=useState(null);
+  const [photoErr,setPhotoErr]=useState("");
+  const photoRef=useRef();
+  const inp={border:`1px solid ${LIGHT}`,borderRadius:"10px",padding:"10px 13px",color:DARK,fontFamily:"sans-serif",fontSize:"14px",outline:"none",width:"100%",display:"block",background:"#FFF"};
+  const linkBtn={border:"none",background:"none",cursor:"pointer",fontFamily:"sans-serif",fontSize:"12px",fontWeight:"600",padding:"6px 4px"};
+  const serialiseIng=ings=>(ings||[]).map(ing=>`${ing.q||""} ${ing.u||""} ${ing.i||ing.item||""}`.replace(/\s+/g," ").trim()).join("\n");
+  const startEdit=()=>{setEd({name:recipe.name||"",prep:recipe.prep||"",cook:recipe.cook||"",serves:String(recipe.serves||"1"),tags:(recipe.tags||[]).join(", "),ingredients:serialiseIng(recipe.ingredients),steps:(recipe.steps||[]).join("\n"),notes:recipe.notes||""});setConf(false);setEditing(true);};
+  const saveEdit=()=>{if(!ed.name.trim())return;const updated={...recipe,name:ed.name.trim(),prep:ed.prep,cook:ed.cook,serves:parseInt(ed.serves)||1,tags:ed.tags.split(",").map(t=>t.trim()).filter(Boolean),ingredients:ed.ingredients.split("\n").filter(l=>l.trim()).map(line=>{const mt=line.trim().match(/^([\d½¼¾]+\s*(?:tbsp|tsp|cups?|g|kg|ml|bunch|handful|tin|cloves?)?\s*)(.*)/i);return mt?{q:mt[1].trim(),u:"",i:mt[2].trim()}:{q:"",u:"",i:line.trim()};}),steps:ed.steps.split("\n").filter(l=>l.trim()),notes:ed.notes};onUpdate(updated);setEditing(false);};
+  const addPhoto=async file=>{setPhotoErr("");try{const dataUrl=await compressImage(file);onUpdate({...recipe,photo:dataUrl});try{const saved=JSON.parse(localStorage.getItem("mp_recipes_v3")||"[]");const r=saved.find(x=>x.id===recipe.id);if(!r||!r.photo)setPhotoErr("Couldn't save the photo — your library may be full on this device. Try removing a photo from another recipe.");}catch{}}catch{setPhotoErr("Couldn't read that photo. Try another one.");}};
+  const removePhoto=()=>{const u={...recipe};delete u.photo;onUpdate(u);};
   return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:50,background:"rgba(61,46,38,0.5)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:"600px",borderRadius:"22px 22px 0 0",background:"#FFF",maxHeight:"90dvh",display:"flex",flexDirection:"column"}}>
       <div style={{display:"flex",justifyContent:"center",padding:"10px 0 3px"}}><div style={{width:"36px",height:"4px",borderRadius:"2px",background:LIGHT}}/></div>
+      <input ref={photoRef} type="file" accept="image/*" capture="environment" onChange={e=>{if(e.target.files[0]){addPhoto(e.target.files[0]);e.target.value="";}}} style={{display:"none"}}/>
       <div style={{overflowY:"auto",flex:1,padding:"4px 17px 32px",WebkitOverflowScrolling:"touch"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}><h2 style={{color:DARK,fontSize:"19px",fontWeight:"bold",flex:1,paddingRight:"12px",lineHeight:"1.25"}}>{recipe.name}</h2><button onClick={onClose} style={{color:MED,fontSize:"24px",lineHeight:1,border:"none",cursor:"pointer",flexShrink:0,background:"none"}}>×</button></div>
+        {editing?(<React.Fragment>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"13px"}}><h2 style={{color:DARK,fontSize:"18px",fontWeight:"bold"}}>Edit recipe</h2><button onClick={()=>setEditing(false)} style={{color:MED,fontSize:"24px",lineHeight:1,border:"none",cursor:"pointer",background:"none"}}>×</button></div>
+          <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+            <input value={ed.name} onChange={e=>setEd({...ed,name:e.target.value})} placeholder="Recipe name *" style={inp}/>
+            <div style={{display:"flex",gap:"7px"}}><input value={ed.prep} onChange={e=>setEd({...ed,prep:e.target.value})} placeholder="Prep mins" style={{...inp,flex:1,width:"auto"}}/><input value={ed.cook} onChange={e=>setEd({...ed,cook:e.target.value})} placeholder="Cook mins" style={{...inp,flex:1,width:"auto"}}/><input value={ed.serves} onChange={e=>setEd({...ed,serves:e.target.value})} placeholder="Serves" style={{...inp,width:"65px"}}/></div>
+            <input value={ed.tags} onChange={e=>setEd({...ed,tags:e.target.value})} placeholder="Tags: dinner, chicken, quick" style={inp}/>
+            <textarea value={ed.ingredients} onChange={e=>setEd({...ed,ingredients:e.target.value})} placeholder={"Ingredients — one per line"} rows={6} style={{...inp,resize:"none"}}/>
+            <textarea value={ed.steps} onChange={e=>setEd({...ed,steps:e.target.value})} placeholder={"Steps — one per line"} rows={6} style={{...inp,resize:"none"}}/>
+            <textarea value={ed.notes} onChange={e=>setEd({...ed,notes:e.target.value})} placeholder="Notes or tips" rows={2} style={{...inp,resize:"none"}}/>
+            <div style={{display:"flex",gap:"7px",marginTop:"3px"}}><button onClick={saveEdit} disabled={!ed.name.trim()} style={{flex:1,padding:"12px",borderRadius:"10px",background:ed.name.trim()?TC:LIGHT,color:ed.name.trim()?"#FAF7F2":MED,fontFamily:"sans-serif",fontSize:"15px",fontWeight:"700",cursor:ed.name.trim()?"pointer":"default",border:"none"}}>Save changes</button><button onClick={()=>setEditing(false)} style={{padding:"12px 18px",borderRadius:"10px",border:`1px solid ${LIGHT}`,color:MED,fontFamily:"sans-serif",fontSize:"14px",cursor:"pointer",background:"none"}}>Cancel</button></div>
+          </div>
+        </React.Fragment>):(<React.Fragment>
+        {recipe.photo&&<div style={{marginBottom:"12px",borderRadius:"14px",overflow:"hidden",border:`1px solid ${LIGHT}`}}><img src={recipe.photo} alt={recipe.name} style={{width:"100%",maxHeight:"260px",objectFit:"cover",display:"block"}}/></div>}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}><h2 style={{color:DARK,fontSize:"19px",fontWeight:"bold",flex:1,paddingRight:"12px",lineHeight:"1.25"}}>{recipe.name}</h2><div style={{display:"flex",alignItems:"center",gap:"7px",flexShrink:0}}><button onClick={startEdit} style={{color:TC,fontFamily:"sans-serif",fontSize:"13px",fontWeight:"600",border:`1px solid ${LIGHT}`,borderRadius:"20px",padding:"5px 12px",cursor:"pointer",background:"none"}}>✏️ Edit</button><button onClick={onClose} style={{color:MED,fontSize:"24px",lineHeight:1,border:"none",cursor:"pointer",background:"none"}}>×</button></div></div>
+        <div style={{marginBottom:"13px"}}>{recipe.photo?(<div style={{display:"flex",gap:"4px"}}><button onClick={()=>photoRef.current.click()} style={{...linkBtn,color:TC}}>Change photo</button><button onClick={removePhoto} style={{...linkBtn,color:MED}}>Remove photo</button></div>):(<button onClick={()=>photoRef.current.click()} style={{width:"100%",borderRadius:"13px",padding:"14px",border:`2px dashed ${LIGHT}`,background:CLIGHT,color:DARK,fontFamily:"sans-serif",fontSize:"13px",fontWeight:"600",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}><span style={{fontSize:"20px"}}>📷</span> Add a photo of your finished meal</button>)}{photoErr&&<p style={{color:"#991B1B",fontFamily:"sans-serif",fontSize:"12px",marginTop:"7px"}}>{photoErr}</p>}</div>
         {(recipe.produces?.length>0||recipe.uses?.length>0)&&(<div style={{display:"flex",gap:"6px",flexWrap:"wrap",marginBottom:"10px"}}>{recipe.produces?.length>0&&<span style={{background:"#FEF9E7",color:"#B7791F",borderRadius:"20px",padding:"4px 10px",fontFamily:"sans-serif",fontSize:"11px",fontWeight:"600"}}>♻️ Creates leftovers — plan a use-up meal after this</span>}{recipe.uses?.length>0&&<span style={{background:"#F0FFF4",color:"#276749",borderRadius:"20px",padding:"4px 10px",fontFamily:"sans-serif",fontSize:"11px",fontWeight:"600"}}>✅ Uses up leftovers from a previous meal</span>}</div>)}
         <div style={{display:"flex",gap:"8px",marginBottom:"13px",flexWrap:"wrap"}}>
           {recipe.prep&&<div style={{background:CLIGHT,borderRadius:"20px",padding:"7px 13px",textAlign:"center"}}><p style={{color:MED,fontFamily:"sans-serif",fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Prep</p><p style={{color:DARK,fontFamily:"sans-serif",fontWeight:"700",fontSize:"14px"}}>{recipe.prep}m</p></div>}
@@ -385,6 +431,7 @@ function RecipeModal({recipe,onClose,onDelete}){
         {recipe.url&&<a href={recipe.url} target="_blank" rel="noopener noreferrer" style={{display:"block",textAlign:"center",marginBottom:"13px",color:TC,fontFamily:"sans-serif",fontSize:"13px"}}>View original source ↗</a>}
         {conf?(<div style={{borderRadius:"12px",padding:"13px",background:"#FEF2F2",border:"1px solid #FECACA"}}><p style={{color:"#991B1B",fontFamily:"sans-serif",fontSize:"13px",marginBottom:"9px",fontWeight:"600"}}>Delete this recipe? Can't be undone.</p><div style={{display:"flex",gap:"7px"}}><button onClick={()=>onDelete(recipe.id)} style={{flex:1,padding:"9px",borderRadius:"10px",background:"#E53E3E",color:"#FFF",fontFamily:"sans-serif",fontSize:"13px",fontWeight:"700",cursor:"pointer",border:"none"}}>Yes, delete</button><button onClick={()=>setConf(false)} style={{flex:1,padding:"9px",borderRadius:"10px",border:`1px solid ${LIGHT}`,color:MED,fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",background:"none"}}>Cancel</button></div></div>)
         :(<button onClick={()=>setConf(true)} style={{width:"100%",padding:"10px",borderRadius:"10px",border:"1px solid #FECACA",color:"#E53E3E",fontFamily:"sans-serif",fontSize:"13px",cursor:"pointer",background:"none"}}>🗑 Delete Recipe</button>)}
+        </React.Fragment>)}
       </div>
     </div>
   </div>);
